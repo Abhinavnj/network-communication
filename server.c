@@ -22,8 +22,12 @@ struct connection {
     int fd;
 };
 
+LinkedList* list;
+
 int server(char *port);
 void *echo(void *arg);
+int clientRequest(char* message, int client_fd);
+int sendResponse(int client_fd, char* response);
 
 int main(int argc, char **argv)
 {
@@ -32,30 +36,13 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-    server(argv[1]);
-    
-    /*
-    LinkedList* list = malloc(sizeof(LinkedList));
+    list = malloc(sizeof(LinkedList));
     list->head = malloc(sizeof(Node));
     initList(list, &list->head);
 
-    insertNode(&list, &list->head, "key", "value");
-    insertNode(&list, &list->head, "nans", "super");
-    insertNode(&list, &list->head, "abhi", "value");
-    printList((list->head));
-
-    char* retVal;
-    deleteNode(&list, &list->head, "key", &retVal);
-    printf("Deleted value: %s\n", retVal);
-
-    printList((list->head));
-
-    setNode(&list, &list->head, "abhi", "reetu");
-
-    printList((list->head));
+    server(argv[1]);
 
     freeList(list, list->head);
-    */
 
     return EXIT_SUCCESS;
 }
@@ -200,7 +187,7 @@ int server(char *port)
 
 void *echo(void *arg)
 {
-    char host[100], port[10], buf[BUFSIZE + 1];
+    char host[100], port[10];
     struct connection *c = (struct connection *) arg;
     int error, nread;
 
@@ -219,17 +206,118 @@ void *echo(void *arg)
 
     printf("[%s:%s] connection\n", host, port);
 
+    char buf[BUFSIZE];
+
+    size_t messageSize = BUFSIZE;
+    char* message = malloc(messageSize);
+    strcpy(message, "\0");
+
     while ((nread = read(c->fd, buf, BUFSIZE)) > 0) {
-        buf[nread] = '\0';
+        size_t len = strlen(message);
+        if (len + nread >= (messageSize - 1)) {
+            messageSize = messageSize * 2;
+            message = realloc(message, messageSize);
+        }
 
-        // do stuff here
+        memcpy(message + len, buf, nread);
+        message[len + nread] = '\0';
 
-        printf("[%s:%s] read %d bytes |%s|\n", host, port, nread, buf);
+        // printf("%s\n", message);
     }
+
+    clientRequest(message, c->fd);
+
+    free(message);
 
     printf("[%s:%s] got EOF\n", host, port);
 
     close(c->fd);
     free(c);
     return NULL;
+}
+
+int clientRequest(char* message, int client_fd) {
+    char* messageTokens[4];
+    char* token;
+    int i = 0;
+
+    token = strtok(message, "\n");
+    messageTokens[i] = token;
+    i++;
+    
+    while (token != NULL && i < 4) {
+        token = strtok(NULL, "\n");
+        messageTokens[i] = token;
+        i++;
+    }
+
+    int rc = EXIT_SUCCESS;
+    
+    char* messageCode = messageTokens[0];
+    int fieldsLength = atoi(messageTokens[1]);
+    if (fieldsLength == 0 && messageTokens[1][0] != '0'){
+        sendResponse(client_fd, "ERR\nBAD\n");
+        rc = EXIT_FAILURE;
+        return rc;
+    }
+
+    char* key = messageTokens[2];
+    char* value = messageTokens[3];
+
+    if (!strcmp("GET", messageCode)) {
+        if (fieldsLength == strlen(key) + 1){
+            rc = getNode(&list, &list->head, key, &value);
+            if (rc) {
+                // printf("hi\n");
+                sendResponse(client_fd, "ERR\nKNF\n");
+
+                return rc;
+            }
+
+            char* valLen = malloc(strlen(value));
+            sprintf(valLen, "%lu", strlen(value));
+
+            int responseLen = 4 + (strlen(value) + 1) * 2;
+            char* response = malloc(responseLen);
+            strcat(response, "OKG\n");
+            strcat(response, valLen);
+            strcat(response, "\n");
+            strcat(response, value);
+            strcat(response, "\n");
+            sendResponse(client_fd, response);
+        } else {
+            //error  - LEN
+        }
+    } else if (!strcmp("SET", messageCode)) {
+        if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
+            rc = setNode(&list, &list->head, key, value);
+            printf("Set value: %s\n", value);
+            printList(list, list->head);
+            //send value back
+        } else {
+            //error  - LEN
+        }
+    } else if (!strcmp("DEL", messageCode)) {
+        if (fieldsLength == strlen(key) + 1){
+            rc = deleteNode(&list, &list->head, key, &value);
+            printf("Del return value: %s\n", value);
+            printList(list, list->head);
+            if (rc) {
+                //key-value error  - KNF
+            }
+            //send value back
+        } else {
+            //error - LEN
+        }
+    } else {
+        //error - BAD
+    }
+    
+    return rc;
+}
+
+int sendResponse(int client_fd, char* response) {
+    write(client_fd, response, strlen(response));
+
+    return EXIT_SUCCESS;
 }

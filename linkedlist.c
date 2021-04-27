@@ -26,6 +26,8 @@ int initList(LinkedList* list, Node** head) {
     (*head)->key = NULL;
     (*head)->value = NULL;
 
+    list->count = 0;
+
     pthread_mutex_init(&(list->lock), NULL);
     lock(&(list->lock));
     unlock(&(list->lock));
@@ -33,7 +35,7 @@ int initList(LinkedList* list, Node** head) {
     return EXIT_SUCCESS;
 }
 
-int insertNode(LinkedList** list, Node** head, char* key, char* value) {
+int setNode(LinkedList** list, Node** head, char* key, char* value) {
     lock(&((*list)->lock));
 
     Node* newNode = malloc(sizeof(Node));
@@ -50,6 +52,7 @@ int insertNode(LinkedList** list, Node** head, char* key, char* value) {
 
     if ((*head)->key == NULL) {
         *head = newNode;
+        (*list)->count += 1;
 
         unlock(&((*list)->lock));
         return EXIT_SUCCESS;
@@ -57,6 +60,7 @@ int insertNode(LinkedList** list, Node** head, char* key, char* value) {
     else if (strcmp((*head)->key, key) > 0) {
         newNode->next = *head;
         *head = newNode;
+        (*list)->count += 1;
 
         unlock(&((*list)->lock));
         return EXIT_SUCCESS;
@@ -66,16 +70,20 @@ int insertNode(LinkedList** list, Node** head, char* key, char* value) {
         Node* prev = *head;
         while (current != NULL){
             if (strcmp(current->key, key) == 0) {
+                current->value = realloc(current->value, valLen);
+                memcpy(current->value, value, valLen);
+
                 free(newNode->key);
                 free(newNode->value);
                 free(newNode);
 
                 unlock(&((*list)->lock));
-                return EXIT_FAILURE;
+                return EXIT_SUCCESS;
             }
             else if (strcmp(current->key, key) > 0) {
                 newNode->next = current;
                 prev->next = newNode;
+                (*list)->count += 1;
 
                 unlock(&((*list)->lock));
                 return EXIT_SUCCESS;
@@ -84,6 +92,7 @@ int insertNode(LinkedList** list, Node** head, char* key, char* value) {
             current = current->next;
         }
         prev->next = newNode;
+        (*list)->count += 1;
     }
 
 	unlock(&((*list)->lock));
@@ -91,15 +100,21 @@ int insertNode(LinkedList** list, Node** head, char* key, char* value) {
     return EXIT_SUCCESS;
 }
 
-int setNode(LinkedList** list, Node** head, char* key, char* value) {
+int getNode(LinkedList** list, Node** head, char* key, char** value) {
 	lock(&((*list)->lock));
+
+    if ((*list)->count <= 0) {
+        unlock(&((*list)->lock));
+        return EXIT_FAILURE;
+    }
 
     Node* ptr = *head;
     while (ptr != NULL) {
         if (strcmp(ptr->key, key) == 0) {
-            int valLen = strlen(value) + 1;
-            ptr->value = realloc(ptr->value, valLen);
-            memcpy(ptr->value, value, valLen);
+            int valLen = strlen(ptr->value) + 1;
+            *value = malloc(valLen);
+            memcpy(*value, ptr->value, valLen);
+            (*value)[valLen - 1] = '\0';
             
             unlock(&((*list)->lock));
             return EXIT_SUCCESS;
@@ -114,20 +129,34 @@ int setNode(LinkedList** list, Node** head, char* key, char* value) {
 int deleteNode(LinkedList** list, Node** head, char* key, char** value) {
     lock(&((*list)->lock));
 
+    if ((*list)->count <= 0) {
+        unlock(&((*list)->lock));
+        return EXIT_FAILURE;
+    }
+
+    int count = 0;
+
     Node* current = *head;
     Node* prev = *head;
     while (current != NULL) {
+        count++;
         if (strcmp(current->key, key) == 0) {
             int valLen = strlen(current->value) + 1;
             *value = malloc(valLen);
             memcpy(*value, current->value, valLen);
+            (*value)[valLen - 1] = '\0';
 
             prev->next = current->next;
+
+            if (count == 1) {
+                *head = prev->next;
+            }
 
             free(current->key);
             free(current->value);
             free(current);
 
+            (*list)->count -= 1;
             unlock(&((*list)->lock));
             return EXIT_SUCCESS;
         }
@@ -154,7 +183,11 @@ void freeList(LinkedList* list, Node* head) {
     free(list);
 }
 
-void printList(Node* head) {
+void printList(LinkedList* list, Node* head) {
+    if ((list)->count == 0){
+        return;
+    }
+
     Node* ptr = head;
     while (ptr != NULL) {
         printf("%s: %s\t", ptr->key, ptr->value);

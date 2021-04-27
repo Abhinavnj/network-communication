@@ -12,5 +12,8 @@ linkedlist.o: linkedlist.c linkedlist.h
 send: send.c
 	gcc send.c $(CFLAGS) -o send
 
+test: test.c
+	gcc test.c $(CFLAGS) -o test
+
 clean:
 	rm -f *.o $(OUTPUT)

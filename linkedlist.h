@@ -10,15 +10,16 @@ typedef struct Node {
 } Node;
 
 typedef struct LinkedList {
+    int count;
     Node* head;
     pthread_mutex_t lock;
 } LinkedList;
 
 int initList(LinkedList* list, Node** head);
-int insertNode(LinkedList** list, Node** head, char* key, char* value);
 int setNode(LinkedList** list, Node** head, char* key, char* value);
+int getNode(LinkedList** list, Node** head, char* key, char** value);
 int deleteNode(LinkedList** list, Node** head, char* key, char** value);
-void printList(Node* head);
+void printList(LinkedList* list, Node* head);
 void freeList(LinkedList* list, Node* head);
 
 #endif
