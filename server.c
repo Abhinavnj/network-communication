@@ -227,7 +227,7 @@ void *echo(void *arg)
         // printf("%s\n", message);
     }
 
-    clientRequest(message, c->fd);
+    int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
 
     free(message);
 
@@ -259,15 +259,16 @@ int clientRequest(char* message, int client_fd) {
             rc = getNode(&list, &list->head, key, &value);
             if (rc) {
                 sendResponse(client_fd, "KNF\n");
-                return rc;
+            } else {
+                char* response = constructResponse("OKG", value);
+                sendResponse(client_fd, response);
+
+                free(response);
             }
-
-            char* response = constructResponse("OKG", value);
-            sendResponse(client_fd, response);
-
-            free(response);
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
+            rc = EXIT_FAILURE;
+            return rc;
         }
     } else if (!strcmp("SET", messageCode)) {
         if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
@@ -275,24 +276,29 @@ int clientRequest(char* message, int client_fd) {
             sendResponse(client_fd, "OKS\n");
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
+            rc = EXIT_FAILURE;
+            return rc;
         }
     } else if (!strcmp("DEL", messageCode)) {
         if (fieldsLength == strlen(key) + 1){
             rc = deleteNode(&list, &list->head, key, &value);
             if (rc) {
                 sendResponse(client_fd, "KNF\n");
-                return rc;
-            }
-            
-            char* response = constructResponse("OKD", value);
-            sendResponse(client_fd, response);
+            } else {
+                char* response = constructResponse("OKD", value);
+                sendResponse(client_fd, response);
 
-            free(response);
+                free(response);
+            }
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
+            rc = EXIT_FAILURE;
+            return rc;
         }
     } else {
         sendResponse(client_fd, "ERR\nBAD\n");
+        rc = EXIT_FAILURE;
+        return rc;
     }
     
     return rc;
