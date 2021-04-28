@@ -226,33 +226,90 @@ void *echo(void *arg)
 
     printf("[%s:%s] connection\n", host, port);
 
-    char buf[BUFSIZE];
+    // FILE *fin = fdopen(dup(c->fd), "r");
+    // FILE *fout = fdopen(c->fd, "w");
 
-    size_t messageSize = BUFSIZE;
+    size_t messageSize = 1;
     char* message = malloc(messageSize);
     strcpy(message, "\0");
 
-    while ((nread = read(c->fd, buf, BUFSIZE)) > 0) {
+    int newlineCount = 0;
+    int fieldsToRead = 3;
+    int fieldsCount = 0;
+    int reset = 0;
+
+    //SET\n11\nday\value\n
+
+    char buf = '\0';
+    while ((nread = read(c->fd, &buf, 1)) > 0 && buf != EOF) {
+        if (buf == '\n') {
+            newlineCount++;
+            fieldsCount++;
+        }
+
+        if (newlineCount == 1) {
+            if (strcmp(message, "SET")) {
+                fieldsToRead = 4;
+            }
+            // TODO: check for other fields
+        }
+
+        if (fieldsCount == fieldsToRead){
+            reset = 1;
+        }
+
         size_t len = strlen(message);
         if (len + nread >= (messageSize - 1)) {
             messageSize = messageSize * 2;
             message = realloc(message, messageSize);
         }
 
-        memcpy(message + len, buf, nread);
+        memcpy(message + len, &buf, nread);
         message[len + nread] = '\0';
+
+        if (reset == 1){
+            // send message
+            int rc = clientRequest(message, c->fd);
+            if (rc) {
+                // TODO: close connection
+            }
+
+            reset = 0;
+            buf = '\0';
+            messageSize = 1;
+            message = realloc(message, messageSize);
+            strcpy(message, "\0");
+            fieldsCount = 0;
+            fieldsToRead = 3;
+        }
     }
-    printf("[%s:%s] got EOF\n", host, port);
+
+    // char buf[BUFSIZE];
+
+    // size_t messageSize = BUFSIZE;
+    // char* message = malloc(messageSize);
+    // strcpy(message, "\0");
+
+    // while ((nread = read(c->fd, buf, BUFSIZE)) > 0) {
+    //     size_t len = strlen(message);
+        // if (len + nread >= (messageSize - 1)) {
+        //     messageSize = messageSize * 2;
+        //     message = realloc(message, messageSize);
+        // }
+
+    //     memcpy(message + len, buf, nread);
+    //     message[len + nread] = '\0';
+    // }
+    // 
 
     // if (strlen(message) >= 8) {
-    printf("fd: %d\n", c->fd);
-    int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
+    // printf("fd: %d\n", c->fd);
+    // int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
     // }
 
+    printf("[%s:%s] got EOF\n", host, port);
     free(message);
 
-
-    sleep(1);
     close(c->fd);
     free(c);
 
@@ -260,10 +317,6 @@ void *echo(void *arg)
 }
 
 int clientRequest(char* message, int client_fd) {
-    printf("passed fd: %d\n", client_fd);
-
-    write(client_fd, "hello", sizeof("hello"));
-
     int rc = EXIT_SUCCESS;
     
     char* messageTokens[4];
@@ -280,7 +333,7 @@ int clientRequest(char* message, int client_fd) {
         return EXIT_FAILURE;
     }
 
-    if (fieldsLength == 0 && messageTokens[1][0] != '0'){ //TODO: check
+    if (fieldsLength == 0 && messageTokens[1][0] != '0') { //TODO: check
         sendResponse(client_fd, "ERR\nBAD\n");
         rc = EXIT_FAILURE;
         return rc;
@@ -289,8 +342,6 @@ int clientRequest(char* message, int client_fd) {
     char* value = messageTokens[3];
 
     if (!strcmp("GET", messageCode)) {
-        printf("GET\n");
-
         if (fieldsLength == strlen(key) + 1){
             rc = getNode(&list, &list->head, key, &value);
             if (rc) {
@@ -307,9 +358,7 @@ int clientRequest(char* message, int client_fd) {
             return rc;
         }
     } else if (!strcmp("SET", messageCode)) {
-        printf("SET\n");
-
-        if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
+        if (fieldsLength == strlen(key) + 1 + strlen(value) + 1) {
             rc = setNode(&list, &list->head, key, value);
             sendResponse(client_fd, "OKS\n");
         } else {
@@ -318,7 +367,7 @@ int clientRequest(char* message, int client_fd) {
             return rc;
         }
     } else if (!strcmp("DEL", messageCode)) {
-        if (fieldsLength == strlen(key) + 1){
+        if (fieldsLength == strlen(key) + 1) {
             rc = deleteNode(&list, &list->head, key, &value);
             if (rc) {
                 sendResponse(client_fd, "KNF\n");
@@ -386,8 +435,6 @@ char* constructResponse(char* responseCode, char* value){
 }
 
 int sendResponse(int client_fd, char* response) {
-    printf("Sending %s to %d\n", response, client_fd);
-
     write(client_fd, response, strlen(response));
 
     return EXIT_SUCCESS;
