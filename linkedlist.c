@@ -50,7 +50,7 @@ int setNode(LinkedList** list, Node** head, char* key, char* value) {
 
     newNode->next = NULL;
 
-    if ((*head)->key == NULL) {
+    if (*head == NULL || (*head)->key == NULL) {
         *head = newNode;
         (*list)->count += 1;
 
@@ -115,10 +115,11 @@ int getNode(LinkedList** list, Node** head, char* key, char** value) {
             *value = malloc(valLen);
             memcpy(*value, ptr->value, valLen);
             (*value)[valLen - 1] = '\0';
-            
+
             unlock(&((*list)->lock));
             return EXIT_SUCCESS;
         }
+        ptr = ptr->next;
     }
 
 	unlock(&((*list)->lock));

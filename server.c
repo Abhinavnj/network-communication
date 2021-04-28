@@ -242,17 +242,16 @@ void *echo(void *arg)
     while ((nread = read(c->fd, &buf, 1)) > 0 && buf != EOF) {
         if (buf == '\n') {
             newlineCount++;
+            if (newlineCount == 1) {
+                if (strcmp(message, "SET") == 0) {
+                    fieldsToRead = 4;
+                }
+                else if (strcmp(message, "GET") != 0 && strcmp(message, "DEL") != 0) {
+                    sendResponse(c->fd, "ERR\nBAD\n");
+                    break;
+                }
+            }
             fieldsCount++;
-        }
-
-        if (newlineCount == 1) {
-            if (strcmp(message, "SET") == 0) {
-                fieldsToRead = 4;
-            }
-            else if (strcmp(message, "GET") != 0 && strcmp(message, "DEL") != 0) {
-                sendResponse(c->fd, "ERR\nBAD\n");
-                break;
-            }
         }
 
         if (fieldsCount == fieldsToRead){
@@ -269,7 +268,6 @@ void *echo(void *arg)
         message[len + nread] = '\0';
 
         if (reset == 1){
-            // send message
             int rc = clientRequest(message, c->fd);
             if (rc) {
                 break;
@@ -296,34 +294,32 @@ void *echo(void *arg)
 }
 
 int clientRequest(char* message, int client_fd) {
-    int rc = EXIT_SUCCESS;
-    
     char* messageTokens[4];
 
     tokenizeMessage(message, messageTokens);
     
     char* messageCode = messageTokens[0];
 
-    int fieldsLength;
-    if (messageTokens[1] != NULL) {
-        fieldsLength = atoi(messageTokens[1]);
-    }
-    else {
-        return EXIT_FAILURE;
+    if (messageTokens[1] == NULL) {
+        return EXIT_FAILURE; 
     }
 
-    if (fieldsLength == 0 && messageTokens[1][0] != '0') { //TODO: check
-        sendResponse(client_fd, "ERR\nBAD\n");
-        rc = EXIT_FAILURE;
-        return rc;
+    for (int i = 0; i < strlen(messageTokens[1]); i++){
+        char c = messageTokens[1][i];
+        if (c < '0' || c > '9') {
+            sendResponse(client_fd, "ERR\nBAD\n");
+            return EXIT_FAILURE;
+        }
     }
+
+    int fieldsLength = atoi(messageTokens[1]);
+
     char* key = messageTokens[2];
     char* value = messageTokens[3];
 
     if (!strcmp("GET", messageCode)) {
         if (fieldsLength == strlen(key) + 1){
-            rc = getNode(&list, &list->head, key, &value);
-            if (rc) {
+            if (getNode(&list, &list->head, key, &value)) {
                 sendResponse(client_fd, "KNF\n");
             } else {
                 char* response = constructResponse("OKG", value);
@@ -333,21 +329,19 @@ int clientRequest(char* message, int client_fd) {
             }
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
-            rc = EXIT_FAILURE;
-            return rc;
+            return EXIT_FAILURE;
         }
     } else if (!strcmp("SET", messageCode)) {
         if (fieldsLength == strlen(key) + 1 + strlen(value) + 1) {
-            rc = setNode(&list, &list->head, key, value);
+            setNode(&list, &list->head, key, value);
             sendResponse(client_fd, "OKS\n");
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
-            rc = EXIT_FAILURE;
-            return rc;
+            return EXIT_FAILURE;
         }
     } else if (!strcmp("DEL", messageCode)) {
         if (fieldsLength == strlen(key) + 1) {
-            rc = deleteNode(&list, &list->head, key, &value);
+            int rc = deleteNode(&list, &list->head, key, &value);
             if (rc) {
                 sendResponse(client_fd, "KNF\n");
             } else {
@@ -358,19 +352,17 @@ int clientRequest(char* message, int client_fd) {
             }
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
-            rc = EXIT_FAILURE;
-            return rc;
+            return EXIT_FAILURE;
         }
     } else {
         sendResponse(client_fd, "ERR\nBAD\n");
-        rc = EXIT_FAILURE;
-        return rc;
+        return EXIT_FAILURE;
     }
     
-    return rc;
+    return EXIT_SUCCESS;
 }
 
-int tokenizeMessage(char* message, char** messageTokens){
+int tokenizeMessage(char* message, char** messageTokens) {
     char* token;
     int i = 0;
 
@@ -388,8 +380,8 @@ int tokenizeMessage(char* message, char** messageTokens){
 }
 
 // used to construct get and del responses
-char* constructResponse(char* responseCode, char* value){
-    char* valLen = malloc(strlen(value));
+char* constructResponse(char* responseCode, char* value) {
+    char* valLen = malloc(strlen(value) + 1);
     sprintf(valLen, "%lu", strlen(value) + 1);
 
     int responseLen = strlen(responseCode) + 1 + strlen(valLen) + 1 + strlen(value) + 1 + 1;

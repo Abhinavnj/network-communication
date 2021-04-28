@@ -9,11 +9,5 @@ server.o: server.c linkedlist.h
 linkedlist.o: linkedlist.c linkedlist.h
 	gcc -c $(CFLAGS) linkedlist.c
 
-send: send.c
-	gcc send.c $(CFLAGS) -o send
-
-test: test.c
-	gcc test.c $(CFLAGS) -o test
-
 clean:
-	rm -f *.o $(OUTPUT)
+	rm -f *.o server linkedlist
