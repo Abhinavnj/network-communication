@@ -258,7 +258,7 @@ int clientRequest(char* message, int client_fd) {
         if (fieldsLength == strlen(key) + 1){
             rc = getNode(&list, &list->head, key, &value);
             if (rc) {
-                sendResponse(client_fd, "ERR\nKNF\n");
+                sendResponse(client_fd, "KNF\n");
                 return rc;
             }
 
@@ -280,7 +280,7 @@ int clientRequest(char* message, int client_fd) {
         if (fieldsLength == strlen(key) + 1){
             rc = deleteNode(&list, &list->head, key, &value);
             if (rc) {
-                sendResponse(client_fd, "ERR\nKNF\n");
+                sendResponse(client_fd, "KNF\n");
                 return rc;
             }
             
