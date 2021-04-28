@@ -27,6 +27,8 @@ LinkedList* list;
 int server(char *port);
 void *echo(void *arg);
 int clientRequest(char* message, int client_fd);
+int tokenizeMessage(char* message, char** messageTokens);
+char* constructResponse(char* responseCode, char* value);
 int sendResponse(int client_fd, char* response);
 
 int main(int argc, char **argv)
@@ -237,7 +239,66 @@ void *echo(void *arg)
 }
 
 int clientRequest(char* message, int client_fd) {
+    int rc = EXIT_SUCCESS;
+    
     char* messageTokens[4];
+    tokenizeMessage(message, messageTokens);
+    
+    char* messageCode = messageTokens[0];
+    int fieldsLength = atoi(messageTokens[1]);
+    if (fieldsLength == 0 && messageTokens[1][0] != '0'){ //TODO: check
+        sendResponse(client_fd, "ERR\nBAD\n");
+        rc = EXIT_FAILURE;
+        return rc;
+    }
+    char* key = messageTokens[2];
+    char* value = messageTokens[3];
+
+    if (!strcmp("GET", messageCode)) {
+        if (fieldsLength == strlen(key) + 1){
+            rc = getNode(&list, &list->head, key, &value);
+            if (rc) {
+                sendResponse(client_fd, "ERR\nKNF\n");
+                return rc;
+            }
+
+            char* response = constructResponse("OKG", value);
+            sendResponse(client_fd, response);
+
+            free(response);
+        } else {
+            sendResponse(client_fd, "ERR\nLEN\n");
+        }
+    } else if (!strcmp("SET", messageCode)) {
+        if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
+            rc = setNode(&list, &list->head, key, value);
+            sendResponse(client_fd, "OKS\n");
+        } else {
+            sendResponse(client_fd, "ERR\nLEN\n");
+        }
+    } else if (!strcmp("DEL", messageCode)) {
+        if (fieldsLength == strlen(key) + 1){
+            rc = deleteNode(&list, &list->head, key, &value);
+            if (rc) {
+                sendResponse(client_fd, "ERR\nKNF\n");
+                return rc;
+            }
+            
+            char* response = constructResponse("OKD", value);
+            sendResponse(client_fd, response);
+
+            free(response);
+        } else {
+            sendResponse(client_fd, "ERR\nLEN\n");
+        }
+    } else {
+        sendResponse(client_fd, "ERR\nBAD\n");
+    }
+    
+    return rc;
+}
+
+int tokenizeMessage(char* message, char** messageTokens){
     char* token;
     int i = 0;
 
@@ -251,69 +312,33 @@ int clientRequest(char* message, int client_fd) {
         i++;
     }
 
-    int rc = EXIT_SUCCESS;
-    
-    char* messageCode = messageTokens[0];
-    int fieldsLength = atoi(messageTokens[1]);
-    if (fieldsLength == 0 && messageTokens[1][0] != '0'){
-        sendResponse(client_fd, "ERR\nBAD\n");
-        rc = EXIT_FAILURE;
-        return rc;
-    }
+    return EXIT_SUCCESS;
+}
 
-    char* key = messageTokens[2];
-    char* value = messageTokens[3];
+// used to construct get and del responses
+char* constructResponse(char* responseCode, char* value){
+    char* valLen = malloc(strlen(value));
+    sprintf(valLen, "%lu", strlen(value) + 1);
 
-    if (!strcmp("GET", messageCode)) {
-        if (fieldsLength == strlen(key) + 1){
-            rc = getNode(&list, &list->head, key, &value);
-            if (rc) {
-                // printf("hi\n");
-                sendResponse(client_fd, "ERR\nKNF\n");
+    int responseLen = strlen(responseCode) + 1 + strlen(valLen) + 1 + strlen(value) + 1 + 1;
+    int usedLen = 0;
 
-                return rc;
-            }
+    char* response = malloc(responseLen * sizeof(char));
+    memcpy(response + usedLen, responseCode, strlen(responseCode));
+    usedLen += strlen(responseCode);
+    memcpy(response + usedLen, "\n", strlen("\n"));
+    usedLen += strlen("\n");
+    memcpy(response + usedLen, valLen, strlen(valLen));
+    usedLen += strlen(valLen);
+    memcpy(response + usedLen, "\n", strlen("\n"));
+    usedLen += strlen("\n");
+    memcpy(response + usedLen, value, strlen(value));
+    usedLen += strlen(value);
+    memcpy(response + usedLen, "\n", strlen("\n"));
+    usedLen += strlen("\n");
+    response[usedLen] = '\0';
 
-            char* valLen = malloc(strlen(value));
-            sprintf(valLen, "%lu", strlen(value));
-
-            int responseLen = 4 + (strlen(value) + 1) * 2;
-            char* response = malloc(responseLen);
-            strcat(response, "OKG\n");
-            strcat(response, valLen);
-            strcat(response, "\n");
-            strcat(response, value);
-            strcat(response, "\n");
-            sendResponse(client_fd, response);
-        } else {
-            //error  - LEN
-        }
-    } else if (!strcmp("SET", messageCode)) {
-        if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
-            rc = setNode(&list, &list->head, key, value);
-            printf("Set value: %s\n", value);
-            printList(list, list->head);
-            //send value back
-        } else {
-            //error  - LEN
-        }
-    } else if (!strcmp("DEL", messageCode)) {
-        if (fieldsLength == strlen(key) + 1){
-            rc = deleteNode(&list, &list->head, key, &value);
-            printf("Del return value: %s\n", value);
-            printList(list, list->head);
-            if (rc) {
-                //key-value error  - KNF
-            }
-            //send value back
-        } else {
-            //error - LEN
-        }
-    } else {
-        //error - BAD
-    }
-    
-    return rc;
+    return response;
 }
 
 int sendResponse(int client_fd, char* response) {

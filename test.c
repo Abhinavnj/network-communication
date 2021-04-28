@@ -20,11 +20,20 @@
 
 int main(int argc, char const *argv[])
 {
-    char* valLen = malloc(strlen(argv[1]));
-    sprintf(valLen, "%lu", strlen(argv[1]));
+    char* value = "Sunday";
+    char* valLen = malloc(strlen(value));
+    sprintf(valLen, "%lu", strlen(value));
+    printf("value length: %s\n", valLen);
 
-    printf("%s\n", valLen);
-    
+    int responseLen = strlen("OKG\n") + strlen(valLen) + 1 + strlen(value) + 1 + 1;
+    printf("response length: %d\n", responseLen);
+    int usedLen = 0;
+
+    char* response = malloc(responseLen * sizeof(char));
+    memcpy(response, "OKG\n", 4);
+    response[4] = '\0';
+    printf("response 1 %s\n", response);
+
     // int valLenDigits = floor(log10(abs(strlen(argv[1])))) + 1;
     // char* valLenDigitsStr = malloc(valLenDigits);
     // itoa(valLenDigits, valLenDigitsStr, 10);
