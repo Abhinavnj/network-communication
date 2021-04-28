@@ -238,8 +238,6 @@ void *echo(void *arg)
     int fieldsCount = 0;
     int reset = 0;
 
-    //SET\n11\nday\value\n
-
     char buf = '\0';
     while ((nread = read(c->fd, &buf, 1)) > 0 && buf != EOF) {
         if (buf == '\n') {
@@ -248,10 +246,13 @@ void *echo(void *arg)
         }
 
         if (newlineCount == 1) {
-            if (strcmp(message, "SET")) {
+            if (strcmp(message, "SET") == 0) {
                 fieldsToRead = 4;
             }
-            // TODO: check for other fields
+            else if (strcmp(message, "GET") != 0 && strcmp(message, "DEL") != 0) {
+                sendResponse(c->fd, "ERR\nBAD\n");
+                break;
+            }
         }
 
         if (fieldsCount == fieldsToRead){
@@ -271,41 +272,19 @@ void *echo(void *arg)
             // send message
             int rc = clientRequest(message, c->fd);
             if (rc) {
-                // TODO: close connection
+                break;
             }
 
-            reset = 0;
-            buf = '\0';
             messageSize = 1;
-            message = realloc(message, messageSize);
+            message = malloc(messageSize);
             strcpy(message, "\0");
-            fieldsCount = 0;
+
+            newlineCount = 0;
             fieldsToRead = 3;
+            fieldsCount = 0;
+            reset = 0;
         }
     }
-
-    // char buf[BUFSIZE];
-
-    // size_t messageSize = BUFSIZE;
-    // char* message = malloc(messageSize);
-    // strcpy(message, "\0");
-
-    // while ((nread = read(c->fd, buf, BUFSIZE)) > 0) {
-    //     size_t len = strlen(message);
-        // if (len + nread >= (messageSize - 1)) {
-        //     messageSize = messageSize * 2;
-        //     message = realloc(message, messageSize);
-        // }
-
-    //     memcpy(message + len, buf, nread);
-    //     message[len + nread] = '\0';
-    // }
-    // 
-
-    // if (strlen(message) >= 8) {
-    // printf("fd: %d\n", c->fd);
-    // int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
-    // }
 
     printf("[%s:%s] got EOF\n", host, port);
     free(message);
