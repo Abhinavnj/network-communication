@@ -223,8 +223,6 @@ void *echo(void *arg)
 
         memcpy(message + len, buf, nread);
         message[len + nread] = '\0';
-
-        // printf("%s\n", message);
     }
 
     int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
