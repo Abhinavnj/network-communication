@@ -169,11 +169,11 @@ int deleteNode(LinkedList** list, Node** head, char* key, char** value) {
     return EXIT_FAILURE;
 }
 
-void freeList(LinkedList* list, Node* head) {
-    Node* tempNode = head;
+void freeList(LinkedList* list, Node** head) {
+    Node* tempNode = *head;
     while (head != NULL) {
-        tempNode = head;
-        head = head->next;
+        tempNode = *head;
+        *head = (*head)->next;
         free(tempNode->key);
         free(tempNode->value);
         free(tempNode);

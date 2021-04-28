@@ -15,10 +15,10 @@ int main(int argc, char **argv)
 	int sock;
 	int i;
 	
-	if (argc < 4) {
-		printf("Usage: %s [host] [port] [message(s)...]\n", argv[0]);
-		exit(EXIT_FAILURE);
-	}
+	// if (argc < 4) {
+	// 	printf("Usage: %s [host] [port] [message(s)...]\n", argv[0]);
+	// 	exit(EXIT_FAILURE);
+	// }
 
 	// we need to provide some additional information to getaddrinfo using hints
 	// we don't know how big hints is, so we use memset to zero out all the fields
@@ -72,11 +72,14 @@ int main(int argc, char **argv)
 	freeaddrinfo(info_list);
 
 	// send the remaining messages to the remote host
-	for (i = 3; i < argc; ++i) {
-		write(sock, argv[i], strlen(argv[i]));
-		sleep(5);
+    char* message = "SET\n11\nday\nSunday\n";
+    write(sock, message, strlen(message));
+    sleep(1);
+	// for (i = 3; i < argc; ++i) {
+		// write(sock, argv[i], strlen(argv[i]));
+		// sleep(5);
 			// wait 50ms between writes, just to make things interesting
-	}
+	// }
 	
 	// close the socket
 	close(sock);

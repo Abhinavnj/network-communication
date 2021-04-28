@@ -20,6 +20,6 @@ int setNode(LinkedList** list, Node** head, char* key, char* value);
 int getNode(LinkedList** list, Node** head, char* key, char** value);
 int deleteNode(LinkedList** list, Node** head, char* key, char** value);
 void printList(LinkedList* list, Node* head);
-void freeList(LinkedList* list, Node* head);
+void freeList(LinkedList* list, Node** head);
 
 #endif

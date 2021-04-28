@@ -30,6 +30,7 @@ int clientRequest(char* message, int client_fd);
 int tokenizeMessage(char* message, char** messageTokens);
 char* constructResponse(char* responseCode, char* value);
 int sendResponse(int client_fd, char* response);
+void freeLL();
 
 int main(int argc, char **argv)
 {
@@ -44,9 +45,25 @@ int main(int argc, char **argv)
 
     server(argv[1]);
 
-    freeList(list, list->head);
+    freeLL();
+    free(list->head);
 
     return EXIT_SUCCESS;
+}
+
+void freeLL() {
+    Node* prev = list->head;
+    Node* curr = list->head;
+    while (curr != NULL) {
+        prev = curr;
+        free(prev->key);
+        free(prev->value);
+        free(prev);
+
+        curr = curr->next;
+    }
+
+    free(list);
 }
 
 void handler(int signal)
@@ -203,6 +220,7 @@ void *echo(void *arg)
     if (error != 0) {
         fprintf(stderr, "getnameinfo: %s", gai_strerror(error));
         close(c->fd);
+        free(c);
         return NULL;
     }
 
@@ -224,26 +242,44 @@ void *echo(void *arg)
         memcpy(message + len, buf, nread);
         message[len + nread] = '\0';
     }
+    printf("[%s:%s] got EOF\n", host, port);
 
+    // if (strlen(message) >= 8) {
+    printf("fd: %d\n", c->fd);
     int rc = clientRequest(message, c->fd); //TODO: if this is failure, close the thing
+    // }
 
     free(message);
 
-    printf("[%s:%s] got EOF\n", host, port);
 
+    sleep(1);
     close(c->fd);
     free(c);
+
     return NULL;
 }
 
 int clientRequest(char* message, int client_fd) {
+    printf("passed fd: %d\n", client_fd);
+
+    write(client_fd, "hello", sizeof("hello"));
+
     int rc = EXIT_SUCCESS;
     
     char* messageTokens[4];
+
     tokenizeMessage(message, messageTokens);
     
     char* messageCode = messageTokens[0];
-    int fieldsLength = atoi(messageTokens[1]);
+
+    int fieldsLength;
+    if (messageTokens[1] != NULL) {
+        fieldsLength = atoi(messageTokens[1]);
+    }
+    else {
+        return EXIT_FAILURE;
+    }
+
     if (fieldsLength == 0 && messageTokens[1][0] != '0'){ //TODO: check
         sendResponse(client_fd, "ERR\nBAD\n");
         rc = EXIT_FAILURE;
@@ -253,6 +289,8 @@ int clientRequest(char* message, int client_fd) {
     char* value = messageTokens[3];
 
     if (!strcmp("GET", messageCode)) {
+        printf("GET\n");
+
         if (fieldsLength == strlen(key) + 1){
             rc = getNode(&list, &list->head, key, &value);
             if (rc) {
@@ -269,6 +307,8 @@ int clientRequest(char* message, int client_fd) {
             return rc;
         }
     } else if (!strcmp("SET", messageCode)) {
+        printf("SET\n");
+
         if (fieldsLength == strlen(key) + 1 + strlen(value) + 1){
             rc = setNode(&list, &list->head, key, value);
             sendResponse(client_fd, "OKS\n");
@@ -346,6 +386,8 @@ char* constructResponse(char* responseCode, char* value){
 }
 
 int sendResponse(int client_fd, char* response) {
+    printf("Sending %s to %d\n", response, client_fd);
+
     write(client_fd, response, strlen(response));
 
     return EXIT_SUCCESS;
