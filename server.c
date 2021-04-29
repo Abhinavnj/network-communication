@@ -50,21 +50,6 @@ int main(int argc, char **argv)
     return EXIT_SUCCESS;
 }
 
-void freeLL() {
-    Node* head = list->head;
-    Node* tempNode = head;
-    while (head->key != NULL) {
-        tempNode = head;
-        head = head->next;
-        free(tempNode->key);
-        free(tempNode->value);
-        free(tempNode);
-    }
-
-    pthread_mutex_destroy(&(list->lock));
-    free(list);
-}
-
 void handler(int signal)
 {
 	running = 0;
@@ -166,6 +151,7 @@ int server(char *port)
         // temporarily block SIGINT (child will inherit mask)
         error = pthread_sigmask(SIG_BLOCK, &mask, NULL);
         if (error != 0) {
+            sendResponse(con->fd, "ERR\nSRV\n");
         	fprintf(stderr, "sigmask: %s\n", strerror(error));
         	abort();
         }
@@ -175,6 +161,7 @@ int server(char *port)
 
 		// if we couldn't spin off the thread, clean up and wait for another connection
         if (error != 0) {
+            sendResponse(con->fd, "ERR\nSRV\n");
             fprintf(stderr, "Unable to create thread: %d\n", error);
             close(con->fd);
             free(con);
@@ -187,6 +174,7 @@ int server(char *port)
         // unblock SIGINT
         error = pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
         if (error != 0) {
+            sendResponse(con->fd, "ERR\nSRV\n");
         	fprintf(stderr, "sigmask: %s\n", strerror(error));
         	abort();
         }
@@ -194,6 +182,7 @@ int server(char *port)
     }
 
 	puts("No longer listening.");
+    free(con);
 	pthread_detach(pthread_self());
 	pthread_exit(NULL);
 
@@ -222,8 +211,6 @@ void *echo(void *arg)
 
     printf("[%s:%s] connection\n", host, port);
 
-    int client_fd = c->fd;
-
     size_t messageSize = 1;
     char* message = malloc(messageSize);
     strcpy(message, "\0");
@@ -242,7 +229,7 @@ void *echo(void *arg)
                     fieldsToRead = 4;
                 }
                 else if (strcmp(message, "GET") != 0 && strcmp(message, "DEL") != 0) {
-                    sendResponse(client_fd, "ERR\nBAD\n");
+                    sendResponse(c->fd, "ERR\nBAD\n");
                     break;
                 }
             }
@@ -263,9 +250,9 @@ void *echo(void *arg)
         message[len + nread] = '\0';
 
         if (reset == 1){
-            int rc = clientRequest(message, client_fd);
+            int rc = clientRequest(message, c->fd);
             if (rc) {
-                break; // TODO: close connection on ERR LEN
+                break;
             }
 
             free(message);
@@ -280,6 +267,7 @@ void *echo(void *arg)
             reset = 0;
         }
     }
+    
 
     printf("[%s:%s] got EOF\n", host, port);
     free(message);
@@ -410,4 +398,19 @@ int sendResponse(int client_fd, char* response) {
     write(client_fd, response, strlen(response));
 
     return EXIT_SUCCESS;
+}
+
+void freeLL() {
+    Node* head = list->head;
+    Node* tempNode = head;
+    while (head->key != NULL) {
+        tempNode = head;
+        head = head->next;
+        free(tempNode->key);
+        free(tempNode->value);
+        free(tempNode);
+    }
+
+    pthread_mutex_destroy(&(list->lock));
+    free(list);
 }
