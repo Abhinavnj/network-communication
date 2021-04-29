@@ -43,26 +43,25 @@ int main(int argc, char **argv)
     list->head = malloc(sizeof(Node));
     initList(list, &list->head);
 
-    server(argv[1]);
+    (void) server(argv[1]);
 
     freeLL();
-    free(list->head);
 
     return EXIT_SUCCESS;
 }
 
 void freeLL() {
-    Node* prev = list->head;
-    Node* curr = list->head;
-    while (curr != NULL) {
-        prev = curr;
-        free(prev->key);
-        free(prev->value);
-        free(prev);
-
-        curr = curr->next;
+    Node* head = list->head;
+    Node* tempNode = head;
+    while (head->key != NULL) {
+        tempNode = head;
+        head = head->next;
+        free(tempNode->key);
+        free(tempNode->value);
+        free(tempNode);
     }
 
+    pthread_mutex_destroy(&(list->lock));
     free(list);
 }
 
@@ -202,8 +201,6 @@ int server(char *port)
     return 0;
 }
 
-#define BUFSIZE 8
-
 void *echo(void *arg)
 {
     char host[100], port[10];
@@ -220,14 +217,12 @@ void *echo(void *arg)
     if (error != 0) {
         fprintf(stderr, "getnameinfo: %s", gai_strerror(error));
         close(c->fd);
-        free(c);
         return NULL;
     }
 
     printf("[%s:%s] connection\n", host, port);
 
-    // FILE *fin = fdopen(dup(c->fd), "r");
-    // FILE *fout = fdopen(c->fd, "w");
+    int client_fd = c->fd;
 
     size_t messageSize = 1;
     char* message = malloc(messageSize);
@@ -247,7 +242,7 @@ void *echo(void *arg)
                     fieldsToRead = 4;
                 }
                 else if (strcmp(message, "GET") != 0 && strcmp(message, "DEL") != 0) {
-                    sendResponse(c->fd, "ERR\nBAD\n");
+                    sendResponse(client_fd, "ERR\nBAD\n");
                     break;
                 }
             }
@@ -260,7 +255,7 @@ void *echo(void *arg)
 
         size_t len = strlen(message);
         if (len + nread >= (messageSize - 1)) {
-            messageSize = messageSize * 2;
+            messageSize *= 2;
             message = realloc(message, messageSize);
         }
 
@@ -268,10 +263,12 @@ void *echo(void *arg)
         message[len + nread] = '\0';
 
         if (reset == 1){
-            int rc = clientRequest(message, c->fd);
+            int rc = clientRequest(message, client_fd);
             if (rc) {
-                break;
+                break; // TODO: close connection on ERR LEN
             }
+
+            free(message);
 
             messageSize = 1;
             message = malloc(messageSize);
@@ -304,7 +301,7 @@ int clientRequest(char* message, int client_fd) {
         return EXIT_FAILURE; 
     }
 
-    for (int i = 0; i < strlen(messageTokens[1]); i++){
+    for (int i = 0; i < strlen(messageTokens[1]); i++) {
         char c = messageTokens[1][i];
         if (c < '0' || c > '9') {
             sendResponse(client_fd, "ERR\nBAD\n");
@@ -327,6 +324,7 @@ int clientRequest(char* message, int client_fd) {
 
                 free(response);
             }
+            free(value);
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
             return EXIT_FAILURE;
@@ -350,6 +348,7 @@ int clientRequest(char* message, int client_fd) {
 
                 free(response);
             }
+            free(value);
         } else {
             sendResponse(client_fd, "ERR\nLEN\n");
             return EXIT_FAILURE;
@@ -401,6 +400,8 @@ char* constructResponse(char* responseCode, char* value) {
     memcpy(response + usedLen, "\n", strlen("\n"));
     usedLen += strlen("\n");
     response[usedLen] = '\0';
+
+    free(valLen);
 
     return response;
 }

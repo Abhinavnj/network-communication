@@ -51,6 +51,8 @@ int setNode(LinkedList** list, Node** head, char* key, char* value) {
     newNode->next = NULL;
 
     if (*head == NULL || (*head)->key == NULL) {
+        free(*head);
+
         *head = newNode;
         (*list)->count += 1;
 
